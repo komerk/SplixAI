@@ -1,54 +1,3 @@
-----------------------------------------
--- script-name: dns_dissector.lua
---
--- author: Hadriel Kaplan <hadrielk at yahoo dot com>
--- Copyright (c) 2014, Hadriel Kaplan
--- This code is in the Public Domain, or the BSD (3 clause) license if Public Domain does not apply
--- in your country.
---
--- Version: 2.1
---
--- Changes since 2.0:
---   * fixed a bug with default settings
---   * added ability for command-line to overide defaults
---
--- Changes since 1.0:
---   * made it use the new ProtoExpert class model for expert info
---   * add a protocol column with the proto name
---   * added heuristic dissector support
---   * added preferences settings
---   * removed byteArray2String(), and uses the new ByteArray:raw() method instead
---
--- BACKGROUND:
--- This is an example Lua script for a protocol dissector. The purpose of this script is two-fold:
---   * To provide a reference tutorial for others writing Wireshark dissectors in Lua
---   * To test various functions being called in various ways, so this script can be used in the test-suites
--- I've tried to meet both of those goals, but it wasn't easy. No doubt some folks will wonder why some
--- functions are called some way, or differently than previous invocations of the same function. I'm trying to
--- to show both that it can be done numerous ways, but also I'm trying to test those numerous ways, and my more
--- immediate need is for test coverage rather than tutorial guide. (the Lua API is sorely lacking in test scripts)
---
--- OVERVIEW:
--- This script creates an elementary dissector for DNS. It's neither comprehensive nor error-free with regards
--- to the DNS protocol. That's OK. The goal isn't to fully dissect DNS properly - Wireshark already has a good
--- DNS dissector built-in. We don't need another one. We also have other example Lua scripts, but I don't think
--- they do a good job of explaining things, and the nice thing about this one is getting capture files to
--- run it against is trivial. (plus I uploaded one)
---
--- HOW TO RUN THIS SCRIPT:
--- Wireshark and Tshark support multiple ways of loading Lua scripts: through a dofile() call in init.lua,
--- through the file being in either the global or personal plugins directories, or via the command line.
--- See the Wireshark USer's Guide chapter on Lua (http://www.wireshark.org/docs/wsug_html_chunked/wsluarm.html).
--- Once the script is loaded, it creates a new protocol named "MyDNS" (or "MYDNS" in some places).  If you have
--- a capture file with DNS packets in it, simply select one in the Packet List pane, right-click on it, and
--- select "Decode As ...", and then in the dialog box that shows up scroll down the list of protocols to one
--- called "MYDNS", select that and click the "ok" or "apply" button.  Voila`, you're now decoding DNS packets
--- using the simplistic dissector in this script.  Another way is to download the capture file made for
--- this script, and open that - since the DNS packets in it use UDP port 65333 (instead of the default 53),
--- and since the MyDNS protocol in this script has been set to automatically decode UDP port 65333, it will
--- automagically do it without doing "Decode As ...".
---
-----------------------------------------
 local function NilToQuestionMark(value)
 	if value == nil then
 		return '?'
@@ -89,6 +38,51 @@ function server_2(oTvbData, oPinfo, oTreeItemRoot, oSubtree)
 	oSubtree:add(oTvbData(5, 2), string.format("ID: %d", oTvbData(5, 2):uint()))
 end
 
+function server_3(oTvbData, oPinfo, oTreeItemRoot, oSubtree)
+	oSubtree:add(oTvbData(1, 2), string.format("X: %d", oTvbData(1, 2):uint()))
+	oSubtree:add(oTvbData(3, 2), string.format("Y: %d", oTvbData(3, 2):uint()))
+	oSubtree:add(oTvbData(5, 2), string.format("Width: %d", oTvbData(5, 2):uint()))
+	oSubtree:add(oTvbData(7, 2), string.format("Height: %d", oTvbData(7, 2):uint()))
+	oSubtree:add(oTvbData(9, 1), string.format("Color: %d", oTvbData(9, 1):uint()))
+	oSubtree:add(oTvbData(10, 1), string.format("Pattern: %d", oTvbData(10, 1):uint()))
+end
+
+function server_4(oTvbData, oPinfo, oTreeItemRoot, oSubtree)
+	oSubtree:add(oTvbData(1, 2), string.format("ID: %d", oTvbData(1, 2):uint()))
+	for i=3,oTvbData:len()-3,4
+	do
+		oSubtree:add(oTvbData(i, 2), string.format("X[%d]: %d", i/4, oTvbData(i, 2):uint()))
+		local j = i + 2
+		oSubtree:add(oTvbData(j, 2), string.format("Y[%d]: %d", i/4, oTvbData(j, 2):uint()))
+	end
+end
+
+function server_5(oTvbData, oPinfo, oTreeItemRoot, oSubtree)
+	oSubtree:add(oTvbData(1, 2), string.format("ID: %d", oTvbData(1, 2):uint()))
+	if oTvbData():len() < 7 then
+		return
+	end
+	
+	oSubtree:add(oTvbData(3, 2), string.format("X: %d", oTvbData(3, 2):uint()))
+	oSubtree:add(oTvbData(5, 2), string.format("Y: %d", oTvbData(5, 2):uint()))
+end
+
+local tColors = {[-1]="none",[0]='red',[1]='red2',[2]='pink',[3]='pink2',[4]='purple',[5]='blue',[6]='blue2',[7]='green',[8]='green2',[9]='leaf',[10]='yellow',[11]='orange',[12]='gold'}
+local colors_count = 13
+function server_6(oTvbData, oPinfo, oTreeItemRoot, oSubtree)
+	local x = oTvbData(1, 2):uint()
+	local y = oTvbData(3, 2):uint()
+	local width = oTvbData(5, 2):uint()
+	oSubtree:add(oTvbData(1, 2), string.format("X: %d", x))
+	oSubtree:add(oTvbData(3, 2), string.format("Y: %d", y))
+	oSubtree:add(oTvbData(5, 2), string.format("Width: %d", width))
+	oSubtree:add(oTvbData(7, 2), string.format("Height: %d", oTvbData(7, 2):uint()))
+	for i = 9,oTvbData():len()-1,1
+	do
+		oSubtree:add(oTvbData(i, 1), string.format("Color [%d, %d]: %s", x + ((i - 9) % width), y + ((i - 9) / width), tColors[(oTvbData(i, 1):uint() - 2) % colors_count]))
+	end
+end
+
 function server_7(oTvbData, oPinfo, oTreeItemRoot, oSubtree)
 	oSubtree:add(oTvbData(1, 2), string.format("ID: %d", oTvbData(1, 2):uint()))
 end
@@ -122,8 +116,33 @@ function server_13(oTvbData, oPinfo, oTreeItemRoot, oSubtree)
 	oSubtree:add(oTvbData(7, 2), string.format("Rank: %d", oTvbData(5, 2):uint()))
 	oSubtree:add(oTvbData(9, 4), string.format("Time lived (in second): %d", oTvbData(9, 4):uint()))
 	oSubtree:add(oTvbData(13, 4), string.format("Time ranked #1(in second): %d", oTvbData(13, 4):uint()))
-	oSubtree:add(oTvbData(17, 1), string.format("Dead type: %d", oTvbData(17, 1):uint()))
+	oSubtree:add(oTvbData(17, 1), string.format("Death type: %d", oTvbData(17, 1):uint()))
 	oSubtree:add(oTvbData(18), string.format("Killed by: %s", oTvbData(18):string()))
+end
+
+function server_14(oTvbData, oPinfo, oTreeItemRoot, oSubtree)
+	initial_x_chunk = oTvbData(1, 1):uint() * 20
+	oSubtree:add(oTvbData(1, 1), string.format("Initial x chunk: %d", initial_x_chunk))
+	
+	
+	for i = 2,oTvbData():len()-1,1
+	do
+		local n = i - 2
+		for bit=0,7,1
+		do
+			local chunk_seq_number = 8 * n + bit
+			
+			local x_chunk = initial_x_chunk + (chunk_seq_number / 80) % 80
+			local y_chunk = chunk_seq_number % 80
+			local x_block = x_chunk * 7.5
+			local y_block = y_chunk * 7.5
+			
+			local temp = oTvbData(i, 1):uint()
+			temp = bit32.rshift(temp, bit)
+			temp = bit32.band(temp, 1)
+			oSubtree:add(oTvbData(i, 1), string.format("Block [%d, %d]: %d", x_block, y_block, temp))
+		end
+	end
 end
 
 function server_15(oTvbData, oPinfo, oTreeItemRoot, oSubtree)
@@ -147,10 +166,10 @@ tFunctions = {["client"]={[1]={'UPDATE_DIR', client_1},
 						  
 			  ["server"]={[1]={'UPDATE_BLOCKS', stub},
 						  [2]={'PLAYER_POS', server_2},
-						  [3]={'FILL_AREA', stub},
-						  [4]={'SET_TRAIL', stub},
-						  [5]={'PLAYER_DIE', stub},
-						  [6]={'CHUNK_OF_BLOCKS', stub},
+						  [3]={'FILL_AREA', server_3},
+						  [4]={'SET_TRAIL', server_4},
+						  [5]={'PLAYER_DIE', server_5},
+						  [6]={'CHUNK_OF_BLOCKS', server_6},
 						  [7]={'REMOVE_PLAYER', server_7},
 						  [8]={'PLAYER_NAME', server_8},
 						  [9]={'MY_SCORE', server_9},
@@ -158,7 +177,7 @@ tFunctions = {["client"]={[1]={'UPDATE_DIR', client_1},
 						  [11]={'LEADERBOARD', server_11},
 						  [12]={'MAP_SIZE', server_12},
 						  [13]={'YOU_DED', server_13},
-						  [14]={'MINIMAP', stub},
+						  [14]={'MINIMAP', server_14},
 						  [15]={'PLAYER_SKIN', server_15},
 						  [16]={'EMPTY_TRAIL_WITH_LAST_POS', stub},
 						  [17]={'READY', stub},
@@ -187,7 +206,7 @@ function oProtoSPLIX.dissector(oTvbData, oPinfo, oTreeItemRoot)
 	local sCommand = NilToQuestionMark(tFunctions[side][uiCommand][1])
 	
 	oPinfo.cols.protocol = 'splix'
-	oPinfo.cols.info = sCommand
+	oPinfo.cols.info = sCommand .. string.format("(%s)", side)
 	local oSubtree = oTreeItemRoot:add(oProtoSPLIX, oTvbData(), 'splix Protocol data')
 	oSubtree:add(oTvbData(0, 1), string.format('Command: %d (%s)', uiCommand, sCommand))
 	
